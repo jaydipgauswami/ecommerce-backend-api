@@ -19,27 +19,23 @@ const getProducts = async (req, res) => {
     const values = [`%${search}%`];
     let index = 2;
 
-    // ✅ category filter
+    // category filter
     if (category_id) {
       query += ` AND products.category_id = $${index}`;
       values.push(parseInt(category_id));
       index++;
     }
 
-    // ✅ pagination
+    //  pagination
     query += ` ORDER BY products.id DESC LIMIT $${index} OFFSET $${index + 1}`;
     values.push(limit, offset);
-
-    
-    console.log("QUERY:", query);
-    console.log("VALUES:", values);
-
     const result = await pool.query(query, values);
-
+    const total = parseInt(totalResult.rows[0].count);
     res.status(200).json({
       success: true,
       count: result.rows.length,
       products: result.rows,
+       total,
     });
   } catch (error) {
     console.error("Get Products Error:", error);
@@ -85,13 +81,15 @@ const getProductById = async (req, res) => {
 
 
 // CREATE product (Admin)
-const createProduct = async (req, res) => { 
-    console.log("HEADERS:", req.headers["content-type"]);
-      console.log("BODY:", req.body);  
-    console.log("FILE:", req.file); 
+const createProduct = async (req, res) => {
   try {
-    const { name, price, category_id, stock, image } = req.body;
+    // Multer से file
+    const image = req.file ? req.file.filename : "";
 
+    // Text fields
+    const { name, price, category_id, stock } = req.body;
+
+    // Validation
     if (!name || !price || !category_id) {
       return res.status(400).json({
         success: false,
@@ -99,7 +97,7 @@ const createProduct = async (req, res) => {
       });
     }
 
-    //  Check category exists
+    // Check category exists
     const categoryCheck = await pool.query(
       "SELECT id FROM categories WHERE id = $1",
       [category_id]
@@ -112,11 +110,12 @@ const createProduct = async (req, res) => {
       });
     }
 
+    // Insert product
     const result = await pool.query(
       `INSERT INTO products (name, price, category_id, stock, image)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [name, price, category_id, stock || 0, image || ""]
+      [name, price, category_id, stock || 0, image]
     );
 
     res.status(201).json({
@@ -129,12 +128,35 @@ const createProduct = async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
-
 //  UPDATE product
 const updateProduct = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { name, price, category_id, stock, image } = req.body;
+    
+
+const  id  = req.params.id;
+
+   const existingProduct = await pool.query(
+      "SELECT * FROM products WHERE id = $1",
+      [id]
+    );
+
+    // 🔹 2. check karo product exist karta hai ya nahi
+    if (existingProduct.rows.length === 0) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+
+    const existingImage = existingProduct.rows[0].image;
+    const { name, price, category_id, stock } = req.body;
+
+    const image = req.file ? req.file.filename : existingImage;
+    
+    if (!name || !price || !category_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, price and category are required",
+      });
+    }
 
     //  Check category exists
     if (category_id) {

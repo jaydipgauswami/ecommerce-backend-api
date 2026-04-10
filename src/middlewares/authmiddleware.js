@@ -21,10 +21,10 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    // ✅ Verify token
+    //  Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // ✅ Get user from DB
+    //  Get user from DB
     const { rows } = await pool.query(
       "SELECT id, name, email, role FROM users WHERE id = $1 AND is_deleted = false",
       [decoded.id]
@@ -37,7 +37,7 @@ const protect = async (req, res, next) => {
       });
     }
 
-    // ✅ Attach user to request
+    //  Attach user to request
     req.user = rows[0];
 
     next();
