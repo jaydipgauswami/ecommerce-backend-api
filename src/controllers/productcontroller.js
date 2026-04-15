@@ -3,14 +3,14 @@ const getProducts = async (req, res) => {
   try {
     let { search = "", page = 1, limit = 10, category_id } = req.query;
 
-    //  convert to number
+    // convert to number
     page = parseInt(page);
     limit = parseInt(limit);
 
     const offset = (page - 1) * limit;
 
-    let query = `
-      SELECT products.*, categories.name AS category_name
+    // 👉 baseQuery alag banaya (IMPORTANT FIX)
+    let baseQuery = `
       FROM products
       LEFT JOIN categories ON products.category_id = categories.id
       WHERE products.name ILIKE $1
@@ -21,27 +21,45 @@ const getProducts = async (req, res) => {
 
     // category filter
     if (category_id) {
-      query += ` AND products.category_id = $${index}`;
+      baseQuery += ` AND products.category_id = $${index}`;
       values.push(parseInt(category_id));
       index++;
     }
 
-    //  pagination
+    // COUNT QUERY (FIXED)
+    const totalQuery = `SELECT COUNT(*) ${baseQuery}`;
+    // console.log("COUNT QUERY:", totalQuery);
+
+    const totalResult = await pool.query(totalQuery, values);
+
+    // DATA QUERY 
+    let query = `
+      SELECT products.*, categories.name AS category_name
+      ${baseQuery}
+    `;
+
     query += ` ORDER BY products.id DESC LIMIT $${index} OFFSET $${index + 1}`;
-    values.push(limit, offset);
-    const result = await pool.query(query, values);
+
+    const result = await pool.query(query, [...values, limit, offset]);
+
     const total = parseInt(totalResult.rows[0].count);
+    const totalPages = Math.ceil(total / limit);
+
+
     res.status(200).json({
       success: true,
       count: result.rows.length,
       products: result.rows,
-       total,
+      total,
+       totalPages ,
+        currentPage: page,
     });
+
   } catch (error) {
     console.error("Get Products Error:", error);
     res.status(400).json({
       success: false,
-      message: error.message, 
+      message: error.message,
     });
   }
 };
